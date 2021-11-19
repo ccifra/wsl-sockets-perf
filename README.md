@@ -4,15 +4,17 @@ Testing performance of raw sockets between windows client and WSL2 Host
 * Tests TCP sockets over localhost
 * Tests Hypervisor sockets
 
+These test use port 50051 for TCP connections, and port 50053 for hypervisor sockeets connections
+
 ## Setup
 
-You must get the GUID of the WSL client VM by running
+You must get the GUID of the WSL client VM by running the following from an Administrator PowerShell
 ```
 hcsdiag list
 ```
-From an administrator powershell script
 
-You must register your integration service with Windows
+You must register the test client "integration service" with Windows,
+From Administrator PowerShell:
 
 ```
 $friendlyName = "HV Socket Test"
@@ -20,8 +22,8 @@ $service = New-Item -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Vi
 $service.("ElementName", $friendlyName)
 ```
 
-The GUID that we are setting in the registry is the HV_GUID_VSOCK_TEMPLATE, meaning <port>-facb-11e6-bd58-64006a7986d3
-And in our case the port we are setting is 50053 (in hex in the GUID)
+The GUID that we are setting in the registry is the `HV_GUID_VSOCK_TEMPLATE`, meaning `<port>-facb-11e6-bd58-64006a7986d3`
+In our case the port we are setting is 50053 (0000C384 in hex)
 
 If you do not register the service you will get an unathorized error trying to connect
 
@@ -39,14 +41,14 @@ g++ linux_server.cc -o server
 mkdir build
 cd build
 cmake ..
-cmake --build .
+cmake --build . --config Release
 ```
 
 ## Run the Tests
 
 ### TCP Performance
 
-localhost Windows
+Windows localhost
 ```
 sockets_server
 ```
@@ -80,8 +82,9 @@ sockets_client.exe -vsock FC65AFDB-069B-4AB0-ACBF-274C34BF8593
 ```
 Replace the GUID with the VM ID you found with `hcsdiag list`
 
-
-My Results (XIDAX Machine, Windows 10, Ubuntu 20.04)
+### Results
+---
+My Results (XIDAX Machine (AMD Ryzen 9 3900X 12-Core Processor               3.80 GHz), Windows 10, Ubuntu 20.04 WSL2)
 ```
 Windows localhost
 Latency 18us, handshaked throughput 4675 MB/s, non handshaked throughput 4769.52 MB/s
