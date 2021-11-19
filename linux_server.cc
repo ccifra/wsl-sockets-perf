@@ -1,3 +1,6 @@
+//---------------------------------------------------------------------
+// Linux server sockets performance test app
+//---------------------------------------------------------------------
 #include <string.h>
 #include <unistd.h>
 #include <iostream>
