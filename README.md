@@ -46,7 +46,52 @@ cmake --build .
 
 ### TCP Performance
 
+localhost Windows
+```
+sockets_server
+```
+
+```
+sockets_client
+```
+
+Windows to WSL
+
+Linux
+```
+./server
+```
+
+Windows
+```
+sockets_client
+```
+
 ### VSOCK Performance
+
+Linux
+```
+./server -vsock
+```
+
+Windows
+```
+sockets_client.exe -vsock FC65AFDB-069B-4AB0-ACBF-274C34BF8593
+```
+Replace the GUID with the VM ID you found with `hcsdiag list`
+
+
+My Results (XIDAX Machine, Windows 10, Ubuntu 20.04)
+```
+Windows localhost
+Latency 18us, handshaked throughput 4675 MB/s, non handshaked throughput 4769.52 MB/s
+
+WSL TCP
+Latency 134us, handshaked throughput 115.6 MB/s, non handshaked throughput 127.5 MB/s
+
+WSL VSock
+Latency 56us, handshaked throughput 1323 MB/s, non handshaked throughput 1872.7 MB/s
+```
 
 ## Useful Links
 * https://stackoverflow.com/questions/60696166/using-the-hyper-v-sockets-between-windows-host-and-linux-guest

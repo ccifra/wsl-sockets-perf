@@ -11,8 +11,11 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #include <hvsocket.h>
+#include <windows.h>
+#include <test_config.h>
 
 #pragma comment(lib, "Ws2_32.lib")
+#pragma comment(lib, "Rpcrt4.lib")
 
 #ifndef AF_HYPERV
 #define AF_HYPERV 34
@@ -40,9 +43,14 @@ void error(const char *msg)
 void Log(int ret, const char* function)
 {
     if (ret == 0)
+    {
         printf("%s success\n", function);
+    }
     else
+    {
         printf("%s error: %d\n", function, WSAGetLastError());
+        error(0);
+    }
 }
 
 //---------------------------------------------------------------------
@@ -56,6 +64,7 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
         if (written < 0)
         {
             std::cout << "Error writing to buffer";
+            error(0);
         }
         //std::cout << "writing data" << std::endl;
         remainingBytes -= written;
@@ -286,7 +295,9 @@ void WriteLatencyData(timeVector times, const string& fileName)
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
 void RunLatencyTest(SOCKET clientSocket)
-{    
+{
+    std::cout << "Start Latency Test." << std::endl;    
+
     timeVector times;
     times.reserve(300000);
     
@@ -312,11 +323,11 @@ void RunLatencyTest(SOCKET clientSocket)
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-void RunThroughputTest(SOCKET clientSocket)
+void RunHandshakeThroughputTest(SOCKET clientSocket)
 {    
+    int iterations = NUM_THROUGHPUT_ITERATIONS;
     double* doubles = (double*)malloc(200000 * sizeof(double));
     auto start = std::chrono::steady_clock::now();
-    int iterations = 1000;
     for (int x=0; x<iterations; ++x)
     {
         WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
@@ -327,12 +338,39 @@ void RunThroughputTest(SOCKET clientSocket)
     std::cout << "Done" << std::endl;
     std::cout << "It took me " << elapsed.count() << " microseconds." << std::endl;
 
-    double totalBytes = 200000 * iterations * 8;
+    double totalBytes = 200000.0 * iterations * 8.0;
+    double totalMB = totalBytes / (1024.0 * 1024.0);
+    std::cout << "Total MB: " << totalMB << std::endl;
+
+    double totalSeconds = elapsed.count() / (1000.0 * 1000.0);
+    std::cout << "Total seconds: " << totalSeconds << std::endl;
+    double MBPerSecond = totalMB / totalSeconds;
+    std::cout << "Handshake Throughput " << MBPerSecond << " MB/S." << std::endl;
+}
+
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+void RunNoHandshakeThroughputTest(SOCKET clientSocket)
+{    
+    int iterations = NUM_THROUGHPUT_ITERATIONS;
+    double* doubles = (double*)malloc(200000 * sizeof(double));
+    WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
+    auto start = std::chrono::steady_clock::now();
+    for (int x=0; x<iterations; ++x)
+    {
+        ReadFromSocket(clientSocket, doubles, 200000 * sizeof(double));
+    }
+    auto end = std::chrono::steady_clock::now();
+    auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    std::cout << "Done" << std::endl;
+    std::cout << "It took me " << elapsed.count() << " microseconds." << std::endl;
+
+    double totalBytes = 200000.0 * iterations * 8.0;
     double totalMB = totalBytes / (1024.0 * 1024.0);
 
     double totalSeconds = elapsed.count() / (1000.0 * 1000.0);
     double MBPerSecond = totalMB / totalSeconds;
-    std::cout << "Throughput " << MBPerSecond << " MB/S." << std::endl;
+    std::cout << "No Handshake Throughput " << MBPerSecond << " MB/S." << std::endl;
 }
 
 //---------------------------------------------------------------------
@@ -392,7 +430,7 @@ SOCKET ConnectTCPSocket()
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-SOCKET ConnectVSocket()
+SOCKET ConnectVSocket(std::string VmId)
 {    
     SOCKET Sock = socket(AF_HYPERV, SOCK_STREAM, HV_PROTOCOL_RAW);
     if (Sock > 0)
@@ -408,9 +446,13 @@ SOCKET ConnectVSocket()
     SOCKADDR_HV addr = { 0 };
     addr.Family = AF_HYPERV;
     //struct __declspec(uuid("AD64DA96-03EC-4596-B7D7-453D0C3E55E3")) ServerVsockTemplate {};
-    struct __declspec(uuid("FC65AFDB-069B-4AB0-ACBF-274C34BF8593")) ServerVsockTemplate {};
-    addr.VmId = __uuidof(ServerVsockTemplate);
-    memcpy(&addr.ServiceId, &HV_GUID_VSOCK_TEMPLATE, sizeof addr.ServiceId);
+    //struct __declspec(uuid(VmId)) ServerVsockTemplate {};
+    UuidFromString((RPC_CSTR)VmId.c_str(), &addr.VmId); // __uuidof(ServerVsockTemplate);
+    //addr.VmId = __uuidof(ServerVsockTemplate);
+
+    std::cout << "VM ID: " << addr.VmId.Data1 << std::endl;
+
+    memcpy(&addr.ServiceId, &HV_GUID_VSOCK_TEMPLATE, sizeof(addr.ServiceId));
     unsigned long Port = 50053;
     addr.ServiceId.Data1 = Port;
     addr.Reserved = 0;
@@ -421,7 +463,7 @@ SOCKET ConnectVSocket()
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-int main(void)
+int main(int argc, char **argv)
 {
     WSADATA wdata;
     int ret = WSAStartup(MAKEWORD(2,2), &wdata);
@@ -445,10 +487,27 @@ int main(void)
     //     }
     // }
 
-    //auto Sock = ConnectVSocket();
-    auto Sock = ConnectTCPSocket();
-    RunLatencyTest(Sock);
-    RunThroughputTest(Sock);
+    SOCKET Sock;
+    if (argc > 1 && std::string(argv[1]) == "-vsock")
+    {
+        if (argc > 2)
+        {
+            std::cout << "Connecting to VSock" << std::endl;
+            Sock = ConnectVSocket(argv[2]);
+        }
+    }
+    else
+    {
+        std::cout << "Connecting to TCP Socket" << std::endl;
+        Sock = ConnectTCPSocket();
+    }
+
+    if (Sock > 0)
+    {
+        RunLatencyTest(Sock);
+        RunHandshakeThroughputTest(Sock);
+        RunNoHandshakeThroughputTest(Sock);
+    }
 
     /* cleanup */
     if (Sock > 0)

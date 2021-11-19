@@ -4,22 +4,22 @@
 #include <fstream>
 #include <iostream>
 #include <ostream>
-//#include <unistd.h>
 #include <sys/types.h> 
-//#include <sys/socket.h>
-//#include <netinet/in.h>
-//#include <linux/tcp.h>
-
 #include <winsock2.h>
+#include <test_config.h>
 
 #pragma comment(lib, "Ws2_32.lib")
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 void error(const char *msg)
 {
     perror(msg);
     exit(1);
 }
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 void WriteToSocket(int socketfd, void* buffer, int numBytes)
 {
     auto remainingBytes = numBytes;
@@ -35,6 +35,8 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
     }
 }
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 void ReadFromSocket(int socket, void* buffer, int count)
 {
     auto totalToRead = count;
@@ -63,20 +65,55 @@ void ReadFromSocket(int socket, void* buffer, int count)
     }
 }
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+void RunLatencyTest(int connectSocket)
+{    
+    double* d = (double*)malloc(32 * sizeof(double));
+    // This send() function sends the 13 bytes of the string to the new socket
+    for (int x=0; x<100; ++x)
+    {
+       ReadFromSocket(connectSocket, d, 1 * sizeof(double));
+       WriteToSocket(connectSocket, d, 1 * sizeof(double));
+    }
+    for (int x=0; x<300000; ++x)
+    {
+       ReadFromSocket(connectSocket, d, 1 * sizeof(double));
+       WriteToSocket(connectSocket, d, 1 * sizeof(double));
+    }
+}
+
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+void RunHandshakeThroughputTest(int connectSocket)
+{    
+    double* doubles = (double*)malloc(200000 * sizeof(double));
+    for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
+    {
+        ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
+        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+    }
+}
+
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+void RunNoHandshakeThroughputTest(int connectSocket)
+{    
+    double* doubles = (double*)malloc(200000 * sizeof(double));
+    ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
+    for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
+    {
+        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+    }
+}
+
+
 int optval = 1;
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 int main(int argc, char *argv[])
 {
-#ifndef _WIN32    
-    // sched_param schedParam;
-    // schedParam.sched_priority = 95;
-    // sched_setscheduler(0, SCHED_FIFO, &schedParam);
-
-    // cpu_set_t cpuSet;
-    // CPU_ZERO(&cpuSet);
-    // CPU_SET(2, &cpuSet);
-    // sched_setaffinity(0, sizeof(cpu_set_t), &cpuSet);
-#endif
 
     int sockfd, newsockfd, portno;
     int clilen;
@@ -140,34 +177,13 @@ int main(int argc, char *argv[])
     if (newsockfd < 0)
     { 
         error("ERROR on accept");
-    }     
-
-    printf("RT Test Test Test\n");
-    //  printf("server: got connection from %s port %d\n",
-    //         inet_ntoa(cli_addr.sin_addr), ntohs(cli_addr.sin_port));
-
-
-    double* d = (double*)malloc(32 * sizeof(double));
-    // This send() function sends the 13 bytes of the string to the new socket
-    for (int x=0; x<100; ++x)
-    {
-       ReadFromSocket(newsockfd, d, 1 * sizeof(double));
-       WriteToSocket(newsockfd, d, 1 * sizeof(double));
-    }
-    for (int x=0; x<300000; ++x)
-    {
-       ReadFromSocket(newsockfd, d, 1 * sizeof(double));
-       WriteToSocket(newsockfd, d, 1 * sizeof(double));
     }
 
-    memset(buffer, 0, 256);
+    std::cout << "Connection!" << std::endl;
 
-    n = recv(newsockfd, buffer, 255, 0);
-    if (n < 0)
-    {
-        error("ERROR reading from socket");
-    }
-    printf("Here is the message: %s\n",buffer);
+    RunLatencyTest(newsockfd);     
+    RunHandshakeThroughputTest(newsockfd);
+    RunNoHandshakeThroughputTest(newsockfd);
 
     closesocket(newsockfd);
     closesocket(sockfd);

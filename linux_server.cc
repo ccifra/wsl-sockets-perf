@@ -1,19 +1,13 @@
 #include <string.h>
-#include <stdio.h>
-#include <errno.h>
 #include <unistd.h>
-#include <fstream>
 #include <iostream>
-#include <ostream>
 #include <sys/socket.h>
 #include <linux/vm_sockets.h>
-#include <stdlib.h>
-#include <sys/types.h> 
-#include <sys/socket.h>
 #include <netinet/in.h>
-#include <linux/tcp.h>
 
-#define BUFF_SIZE 400
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+static int sockfd;
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
@@ -35,7 +29,6 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
         {
             std::cout << "Error writing to buffer";
         }
-        //std::cout << "writing data" << std::endl;
         remainingBytes -= written;
     }
 }
@@ -51,21 +44,12 @@ void ReadFromSocket(int socket, void* buffer, int count)
         do
         {
             n = recv(socket, (char*)buffer, totalToRead, 0); //MSG_DONTWAIT);
-            // if (n < 0)
-            // {
-            //     if (errno == EAGAIN)
-            //     {
-            //         std::cout << "No data Try Again" << std::endl;
-            //     }
-            //     std::cout << "No data" << std::endl;
-            // }
         } while (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK));
 
         if (n < 0)
         {
             std::cout << "Failed To read." << std::endl;
         }
-        // std::cout << "Got Data: " << n << " Total: " << totalToRead << std::endl;
         totalToRead -= n;
     }
 }
@@ -75,7 +59,6 @@ void ReadFromSocket(int socket, void* buffer, int count)
 void RunLatencyTest(int connectSocket)
 {    
     double* d = (double*)malloc(32 * sizeof(double));
-    // This send() function sends the 13 bytes of the string to the new socket
     for (int x=0; x<100; ++x)
     {
        ReadFromSocket(connectSocket, d, 1 * sizeof(double));
@@ -90,17 +73,27 @@ void RunLatencyTest(int connectSocket)
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-void RunThroughputTest(int connectSocket)
+void RunHandshakedThroughputTest(int connectSocket)
 {    
     double* doubles = (double*)malloc(200000 * sizeof(double));
-    for (int x=0; x<1000; ++x)
+    for (int x=0; x<10000; ++x)
     {
         ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
         WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
     }
 }
 
-static int sockfd;
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
+void RunNoHandshakedThroughputTest(int connectSocket)
+{    
+    double* doubles = (double*)malloc(200000 * sizeof(double));
+    ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
+    for (int x=0; x<10000; ++x)
+    {
+        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+    }
+}
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
@@ -140,14 +133,6 @@ int AcceptVSock()
         printf("listen error: %s\n", strerror(errno));
     }
     int connectSocket = accept(sockfd, (struct sockaddr*)&addr, &addrlen);
-    if (connectSocket < 0)
-    {
-        printf("accept error: %s\n", strerror(errno));
-    }
-    else
-    {
-        printf("client socket: %d\n", connectSocket);
-    }
     return connectSocket;
 }
 
@@ -189,27 +174,32 @@ int AcceptTCPSocket()
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-int main(void)
+int main(int argc, char **argv)
 {
-    //int connectSocket = AcceptVSock();
-    int connectSocket = AcceptTCPSocket();
+    int connectSocket = 0;
+    if (argc > 1 && std::string(argv[1]) == "-vsock")
+    {
+        std::cout << "Listening on VSock" << std::endl;
+        connectSocket = AcceptVSock();
+    }
+    else
+    {
+        std::cout << "Listening on TCP Socket" << std::endl;
+        connectSocket = AcceptTCPSocket();
+    }
+
+    if (connectSocket < 0)
+    {
+        printf("accept error: %s\n", strerror(errno));
+    }
+    else
+    {
+        printf("client socket: %d\n", connectSocket);
+    }
+
     RunLatencyTest(connectSocket);
-    RunThroughputTest(connectSocket);
-
-    // char msg[BUFF_SIZE];
-
-    // do
-    // {
-    //     memset(msg, 0, sizeof msg);
-    //     ret = recv(csockfd, msg, BUFF_SIZE, 0);
-    //     if(ret > 0)
-    //         printf("%s\n", msg);
-    //     else if (ret == 0)
-    //         printf("server closing...\n");
-    //     else
-    //         break;
-
-    // } while (ret > 0);
+    RunHandshakedThroughputTest(connectSocket);
+    RunNoHandshakedThroughputTest(connectSocket);
 
     // cleanup
     if (sockfd > 0)

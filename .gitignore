@@ -11,16 +11,14 @@ CTestTestfile.cmake
 _deps
 gens
 
+server
+
 build
 bin
 obj
 third_party
-grpc
 .vs
 .vscode
-
-perftest_client
-perftest_server
 
 *.pb.cc
 *.pb.h
