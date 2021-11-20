@@ -5,7 +5,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sstream>
 #include <fstream>
 #include <iostream>
 #include <chrono>
@@ -17,17 +16,19 @@
 #include <windows.h>
 #include <test_config.h>
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Rpcrt4.lib")
 
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 #ifndef AF_HYPERV
-#define AF_HYPERV 34
+    #define AF_HYPERV 34
 #endif
 
-#define BUFF_SIZE 400
-#define DEFAULT_TCP_PORT "50051"
-
-using namespace std;
+//---------------------------------------------------------------------
+//---------------------------------------------------------------------
 using timeVector = std::vector<std::chrono::microseconds>;
 
 //---------------------------------------------------------------------
@@ -44,18 +45,18 @@ void Log(int ret, const char* function)
 {
     if (ret == 0)
     {
-        printf("%s success\n", function);
+        std::cout << function << " success" << std::endl;
     }
     else
     {
-        printf("%s error: %d\n", function, WSAGetLastError());
+        std::cout << function << " error: " << WSAGetLastError() << std::endl;
         error(0);
     }
 }
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-void WriteToSocket(int socketfd, void* buffer, int numBytes)
+void WriteToSocket(SOCKET socketfd, void* buffer, int numBytes)
 {
     auto remainingBytes = numBytes;
     while (remainingBytes > 0)
@@ -72,7 +73,7 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-void ReadFromSocket(int socket, void* buffer, int count)
+void ReadFromSocket(SOCKET socket, void* buffer, int count)
 {
     auto totalToRead = count;
     while (totalToRead > 0)
@@ -94,7 +95,7 @@ void ReadFromSocket(int socket, void* buffer, int count)
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
-void WriteLatencyData(timeVector times, const string& fileName)
+void WriteLatencyData(timeVector times, const std::string& fileName)
 {
     auto iterations = times.size();
 
@@ -123,17 +124,19 @@ void WriteLatencyData(timeVector times, const string& fileName)
     auto max = times.back();
     auto median = *(times.begin() + iterations / 2);
     
-    double average = times.front().count();
+    double average = (double)times.front().count();
     for (auto i : times)
+    {
         average += (double)i.count();
+    }
     average = average / iterations;
 
-    cout << "End Test" << endl;
-    cout << "Min: " << min.count() << endl;
-    cout << "Max: " << max.count() << endl;
-    cout << "Median: " << median.count() << endl;
-    cout << "Average: " << average << endl;
-    cout << endl;
+    std::cout << "End Test" << std::endl;
+    std::cout << "Min: " << min.count() << std::endl;
+    std::cout << "Max: " << max.count() << std::endl;
+    std::cout << "Median: " << median.count() << std::endl;
+    std::cout << "Average: " << average << std::endl;
+    std::cout << std::endl;
 }
 
 //---------------------------------------------------------------------
@@ -143,7 +146,7 @@ void RunLatencyTest(SOCKET clientSocket)
     std::cout << "Start Latency Test." << std::endl;    
 
     timeVector times;
-    times.reserve(300000);
+    times.reserve(NUM_LATENCY_ITERATIONS);
     
     double* doubles = (double*)malloc(32 * sizeof(double));
     for (int x=0; x<100; ++x)
@@ -151,7 +154,7 @@ void RunLatencyTest(SOCKET clientSocket)
         WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
         ReadFromSocket(clientSocket, doubles, 1 * sizeof(double));
     }
-    for (int x=0; x<300000; ++x)
+    for (int x=0; x<NUM_LATENCY_ITERATIONS; ++x)
     {
         auto start = std::chrono::steady_clock::now();
         WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
@@ -169,19 +172,19 @@ void RunLatencyTest(SOCKET clientSocket)
 void RunHandshakeThroughputTest(SOCKET clientSocket)
 {    
     int iterations = NUM_THROUGHPUT_ITERATIONS;
-    double* doubles = (double*)malloc(200000 * sizeof(double));
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
     auto start = std::chrono::steady_clock::now();
     for (int x=0; x<iterations; ++x)
     {
         WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
-        ReadFromSocket(clientSocket, doubles, 200000 * sizeof(double));
+        ReadFromSocket(clientSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
     auto end = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     std::cout << "Done" << std::endl;
     std::cout << "It took me " << elapsed.count() << " microseconds." << std::endl;
 
-    double totalBytes = 200000.0 * iterations * 8.0;
+    double totalBytes = (double)DOUBLES_PER_ITERATION * iterations * 8.0;
     double totalMB = totalBytes / (1024.0 * 1024.0);
     std::cout << "Total MB: " << totalMB << std::endl;
 
@@ -196,19 +199,19 @@ void RunHandshakeThroughputTest(SOCKET clientSocket)
 void RunNoHandshakeThroughputTest(SOCKET clientSocket)
 {    
     int iterations = NUM_THROUGHPUT_ITERATIONS;
-    double* doubles = (double*)malloc(200000 * sizeof(double));
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
     WriteToSocket(clientSocket, doubles, 1 * sizeof(double));
     auto start = std::chrono::steady_clock::now();
     for (int x=0; x<iterations; ++x)
     {
-        ReadFromSocket(clientSocket, doubles, 200000 * sizeof(double));
+        ReadFromSocket(clientSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
     auto end = std::chrono::steady_clock::now();
     auto elapsed = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     std::cout << "Done" << std::endl;
     std::cout << "It took me " << elapsed.count() << " microseconds." << std::endl;
 
-    double totalBytes = 200000.0 * iterations * 8.0;
+    double totalBytes = (double)DOUBLES_PER_ITERATION * iterations * 8.0;
     double totalMB = totalBytes / (1024.0 * 1024.0);
 
     double totalSeconds = elapsed.count() / (1000.0 * 1000.0);
@@ -232,10 +235,10 @@ SOCKET ConnectTCPSocket()
     hints.ai_protocol = IPPROTO_TCP;
 
     // Resolve the server address and port
-    iResult = getaddrinfo("localhost", DEFAULT_TCP_PORT, &hints, &result);
+    iResult = getaddrinfo("localhost", TEST_TCP_PORT_STR, &hints, &result);
     if ( iResult != 0 )
     {
-        printf("getaddrinfo failed with error: %d\n", iResult);
+        std::cout << "getaddrinfo failed with error: " << iResult << std::endl;
         error(0);
     }
 
@@ -246,7 +249,7 @@ SOCKET ConnectTCPSocket()
         ConnectSocket = socket(ptr->ai_family, ptr->ai_socktype, ptr->ai_protocol);
         if (ConnectSocket == INVALID_SOCKET)
         {
-            printf("socket failed with error: %ld\n", WSAGetLastError());
+            std::cout << "socket failed with error: " << WSAGetLastError() << std::endl;
             WSACleanup();
             return 1;
         }
@@ -264,7 +267,7 @@ SOCKET ConnectTCPSocket()
     freeaddrinfo(result);
     if (ConnectSocket == INVALID_SOCKET)
     {
-        printf("Unable to connect to server!\n");
+        std::cout << "Unable to connect to server!" << std::endl;
         WSACleanup();
         return 1;
     }
@@ -278,11 +281,11 @@ SOCKET ConnectVSocket(std::string VmId)
     SOCKET Sock = socket(AF_HYPERV, SOCK_STREAM, HV_PROTOCOL_RAW);
     if (Sock > 0)
     {
-        printf("server socket: %lld\n", Sock);
+        std::cout << "server socket: " << Sock << std::endl;
     }
     else
     {
-        printf("socket error: %d\n", WSAGetLastError());
+        std::cout << "socket error: " << WSAGetLastError() << std::endl;
         error(0);
     }
 
@@ -292,7 +295,7 @@ SOCKET ConnectVSocket(std::string VmId)
     std::cout << "VM ID: " << addr.VmId.Data1 << std::endl;
 
     memcpy(&addr.ServiceId, &HV_GUID_VSOCK_TEMPLATE, sizeof(addr.ServiceId));
-    unsigned long Port = 50053;
+    unsigned long Port = TEST_VSOCK_PORT;
     addr.ServiceId.Data1 = Port;
     addr.Reserved = 0;
     int ret = connect(Sock, (struct sockaddr*)&addr, sizeof addr);
@@ -308,7 +311,7 @@ int main(int argc, char **argv)
     int ret = WSAStartup(MAKEWORD(2,2), &wdata);
     if (ret != 0)
     {
-        printf("WSAStartup error: %d\n", ret);
+        std::cout << "WSAStartup error: " << ret << std::endl;
         error(0);
     }
 

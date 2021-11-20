@@ -32,6 +32,7 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
         if (written < 0)
         {
             std::cout << "Error writing to buffer";
+            error(0);
         }
         remainingBytes -= written;
     }
@@ -53,6 +54,7 @@ void ReadFromSocket(int socket, void* buffer, int count)
         if (n < 0)
         {
             std::cout << "Failed To read." << std::endl;
+            error(0);
         }
         totalToRead -= n;
     }
@@ -68,7 +70,7 @@ void RunLatencyTest(int connectSocket)
        ReadFromSocket(connectSocket, d, 1 * sizeof(double));
        WriteToSocket(connectSocket, d, 1 * sizeof(double));
     }
-    for (int x=0; x<300000; ++x)
+    for (int x=0; x<NUM_LATENCY_ITERATIONS; ++x)
     {
        ReadFromSocket(connectSocket, d, 1 * sizeof(double));
        WriteToSocket(connectSocket, d, 1 * sizeof(double));
@@ -79,11 +81,11 @@ void RunLatencyTest(int connectSocket)
 //---------------------------------------------------------------------
 void RunHandshakeThroughputTest(int connectSocket)
 {    
-    double* doubles = (double*)malloc(200000 * sizeof(double));
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
     for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
     {
         ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
-        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+        WriteToSocket(connectSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
 }
 
@@ -91,11 +93,11 @@ void RunHandshakeThroughputTest(int connectSocket)
 //---------------------------------------------------------------------
 void RunNoHandshakeThroughputTest(int connectSocket)
 {    
-    double* doubles = (double*)malloc(200000 * sizeof(double));
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
     ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
     for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
     {
-        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+        WriteToSocket(connectSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
 }
 
@@ -122,7 +124,7 @@ int main(int argc, char *argv[])
     }
 
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
-    int portno = 50051;
+    int portno = TEST_TCP_PORT;
 
     serv_addr.sin_family = AF_INET;  
     serv_addr.sin_addr.s_addr = INADDR_ANY;  

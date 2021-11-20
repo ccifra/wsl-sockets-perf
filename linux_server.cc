@@ -7,6 +7,7 @@
 #include <sys/socket.h>
 #include <linux/vm_sockets.h>
 #include <netinet/in.h>
+#include "test_config.h"
 
 //---------------------------------------------------------------------
 //---------------------------------------------------------------------
@@ -30,7 +31,7 @@ void WriteToSocket(int socketfd, void* buffer, int numBytes)
         int written = send(socketfd, (char*)buffer, remainingBytes, 0);
         if (written < 0)
         {
-            std::cout << "Error writing to buffer";
+            std::cout << "Error writing to buffer" << std::endl;
         }
         remainingBytes -= written;
     }
@@ -67,7 +68,7 @@ void RunLatencyTest(int connectSocket)
        ReadFromSocket(connectSocket, d, 1 * sizeof(double));
        WriteToSocket(connectSocket, d, 1 * sizeof(double));
     }
-    for (int x=0; x<300000; ++x)
+    for (int x=0; x<NUM_LATENCY_ITERATIONS; ++x)
     {
        ReadFromSocket(connectSocket, d, 1 * sizeof(double));
        WriteToSocket(connectSocket, d, 1 * sizeof(double));
@@ -78,11 +79,11 @@ void RunLatencyTest(int connectSocket)
 //---------------------------------------------------------------------
 void RunHandshakedThroughputTest(int connectSocket)
 {    
-    double* doubles = (double*)malloc(200000 * sizeof(double));
-    for (int x=0; x<10000; ++x)
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
+    for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
     {
         ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
-        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+        WriteToSocket(connectSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
 }
 
@@ -90,11 +91,11 @@ void RunHandshakedThroughputTest(int connectSocket)
 //---------------------------------------------------------------------
 void RunNoHandshakedThroughputTest(int connectSocket)
 {    
-    double* doubles = (double*)malloc(200000 * sizeof(double));
+    double* doubles = (double*)malloc(DOUBLES_PER_ITERATION * sizeof(double));
     ReadFromSocket(connectSocket, doubles, 1 * sizeof(double));
-    for (int x=0; x<10000; ++x)
+    for (int x=0; x<NUM_THROUGHPUT_ITERATIONS; ++x)
     {
-        WriteToSocket(connectSocket, doubles, 200000 * sizeof(double));
+        WriteToSocket(connectSocket, doubles, DOUBLES_PER_ITERATION * sizeof(double));
     }
 }
 
@@ -105,35 +106,35 @@ int AcceptVSock()
     sockfd = socket(AF_VSOCK, SOCK_STREAM, 0);
     if (sockfd < 0)
     {
-        printf("socket error: %s\n", strerror(errno));
+        std::cout << "socket error: " << strerror(errno) << std::endl;
     }
     else
     {
-        printf("socket: %d\n", sockfd);
+        std::cout << "socket: " << sockfd << std::endl;
     }
     struct sockaddr_vm addr = { 0 };
     addr.svm_family = AF_VSOCK;
-    addr.svm_port = 50053; //VMADDR_PORT_ANY;
+    addr.svm_port = TEST_VSOCK_PORT; //VMADDR_PORT_ANY;
     addr.svm_cid = VMADDR_CID_ANY;
     int ret = bind(sockfd, (struct sockaddr*)&addr, sizeof addr);
     if (ret < 0)
     {
-        printf("bind error: %s\n", strerror(errno));
+        std::cout << "bind error: " << strerror(errno) << std::endl;
     }
     socklen_t addrlen = sizeof addr;
     ret = getsockname(sockfd, (struct sockaddr*)&addr, &addrlen);
     if (ret < 0)
     {
-        printf("getsockname error: %s\n", strerror(errno));
+        std::cout << "getsockname error: " << strerror(errno) << std::endl;
     }
     else
     {
-        printf("getsockname port: %d\n", addr.svm_port);
+        std::cout << "getsockname port: " << addr.svm_port << std::endl;
     }
     ret = listen(sockfd, 1);
     if (ret < 0)
     {
-        printf("listen error: %s\n", strerror(errno));
+        std::cout << "listen error: " << strerror(errno) << std::endl;
     }
     int connectSocket = accept(sockfd, (struct sockaddr*)&addr, &addrlen);
     return connectSocket;
@@ -152,12 +153,10 @@ int AcceptTCPSocket()
        error("ERROR opening socket");
     }
 
-    auto portno = 50051;
-
     memset((char *) &serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;  
     serv_addr.sin_addr.s_addr = INADDR_ANY;  
-    serv_addr.sin_port = htons(portno);
+    serv_addr.sin_port = htons(TEST_TCP_PORT);
 
     if (bind(sockfd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) < 0)
     {
@@ -193,11 +192,11 @@ int main(int argc, char **argv)
 
     if (connectSocket < 0)
     {
-        printf("accept error: %s\n", strerror(errno));
+        std::cout << "accept error: " << strerror(errno) << std::endl;
     }
     else
     {
-        printf("client socket: %d\n", connectSocket);
+        std::cout << "client socket: " << connectSocket << std::endl;
     }
 
     RunLatencyTest(connectSocket);
